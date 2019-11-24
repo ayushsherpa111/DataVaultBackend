@@ -7,6 +7,10 @@ const userSchema = mongoose.Schema({
   masterPassword: {
     type: String,
     required: true
+  },
+  confirmed: {
+    type: Boolean,
+    default:false
   }
 });
 
