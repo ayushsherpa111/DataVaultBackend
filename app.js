@@ -4,6 +4,7 @@ if (process.env.NODE_ENV !== "production") {
 //Dependencies
 const express = require("express");
 const app = express();
+const cookieParser = require("cookie-parser");
 const logger = require("morgan");
 const cors = require("cors");
 //Database
@@ -20,6 +21,13 @@ mongoose
 
 //Routes
 const loginRoute = require("./routes/login");
+const impRoute = require("./routes/important");
+
+//Middlewares
+app.use(function(req, res, next) {
+  res.removeHeader("X-Powered-By");
+  next();
+});
 app.use(
   cors({
     origin: "*"
@@ -32,7 +40,21 @@ app.use(
     extended: true
   })
 );
+app.use(cookieParser(process.env.COOKIE_SECET));
+// app.use(function())
 
 app.use("/login", loginRoute);
+app.use("/imp", impRoute);
+
+app.use(function(err, req, res, next) {
+  // set locals, only providing error in development
+  res.locals.message = err.message;
+  res.locals.error = req.app.get("env") === "development" ? err : {};
+
+  // render the error page
+  res.status(err.status || 500).json({
+    error: err.message
+  });
+});
 
 module.exports = app;

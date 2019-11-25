@@ -3,7 +3,27 @@ const User = require("../models/Users");
 const bcrypt = require("bcrypt");
 const nodemailer = require("nodemailer");
 const jwt = require("jsonwebtoken");
-const { emailValidation } = require("../middlewares/validation");
+const {
+  emailValidation,
+  loginValidation,
+  createToken
+} = require("../middlewares/validation");
+
+router.post("/", loginValidation, async (req, res) => {
+  res.cookie(
+    "jid",
+    await createToken(
+      { _id: req.user._id, email: req.user.email },
+      process.env.REFRESH_TOKEN,
+      { expiresIn: "7d" }
+    ),
+    {
+      httpOnly: true,
+      expires: new Date(Date.now() + 800000000)
+    }
+  );
+  res.json(req.user);
+});
 
 router.post("/signup", emailValidation, async (request, response) => {
   let email = request.body.email;
@@ -30,10 +50,6 @@ router.post("/signup", emailValidation, async (request, response) => {
     });
 });
 
-router.post("/signup", (req, res) => {
-  res.send("ERROR");
-});
-
 router.get("/activate/:email/:token/confirm", (request, response) => {
   let email = request.params.email;
   let token = request.params.token;
@@ -47,10 +63,13 @@ router.get("/activate/:email/:token/confirm", (request, response) => {
     },
     async (err, decoded) => {
       if (!err) {
-        await User.findOneAndUpdate({email},{
-          confirmed:true
-        })
-        response.send("LOGIN now")
+        await User.findOneAndUpdate(
+          { email },
+          {
+            confirmed: true
+          }
+        );
+        response.redirect("/login");
       }
     }
   );
@@ -81,11 +100,15 @@ async function sendConfirmation(email, body) {
 
 async function generateMessageBody(userEmail) {
   try {
-    let token = await jwt.sign({ email: userEmail }, process.env.JWT_SECRET, {
-      issuer: process.env.EMAIL,
-      expiresIn: "1d",
-      subject: userEmail
-    });
+    let token = await createToken(
+      { email: userEmail },
+      process.env.JWT_SECRET,
+      {
+        issuer: process.env.EMAIL,
+        expiresIn: "1d",
+        subject: userEmail
+      }
+    );
     let activationLink =
       "http://127.0.0.1:8001/login/activate/" +
       userEmail +

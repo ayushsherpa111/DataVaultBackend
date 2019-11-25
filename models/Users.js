@@ -10,8 +10,15 @@ const userSchema = mongoose.Schema({
   },
   confirmed: {
     type: Boolean,
-    default:false
+    default: false
   }
 });
+
+userSchema.methods.toJSON = function(next) {
+  let user = this;
+  let userObj = user.toObject();
+  delete userObj["masterPassword"];
+  return userObj;
+};
 
 module.exports = mongoose.model("User", userSchema);
