@@ -1,12 +1,14 @@
 const router = require("express").Router();
 const User = require("../models/Users");
 const bcrypt = require("bcrypt");
+const createError = require('http-errors')
 const nodemailer = require("nodemailer");
 const jwt = require("jsonwebtoken");
 const {
   emailValidation,
   loginValidation,
-  createToken
+  createToken,
+  authPassword
 } = require("../middlewares/validation");
 
 router.post("/", loginValidation, async (req, res) => {
@@ -25,28 +27,30 @@ router.post("/", loginValidation, async (req, res) => {
   res.json(req.user);
 });
 
-router.post("/signup", emailValidation, async (request, response) => {
+router.post("/signup", emailValidation, authPassword, async (request, response,next) => {
   let email = request.body.email;
-  let masterPassword = await bcrypt.hash(request.body.masterPassword, 10);
+  let masterPassword = request.body.masterPassword;
   let newUser = new User({
     email,
     masterPassword
   });
-  await newUser.save();
   generateMessageBody(email, response)
     .then(body => {
       sendConfirmation(email, body)
-        .then(info => {
+        .then(async info => {
+          await newUser.save();
           response.send(
             "Please check your email to finish the setup" + info.messageId
           );
         })
         .catch(e => {
           console.log("ERROR", e);
+          next(createError(400,"Email doesnot exist"))
         });
     })
     .catch(e => {
       console.log("ERROR: ", e);
+      next(createError(418,"OOPS"))
     });
 });
 
@@ -69,7 +73,7 @@ router.get("/activate/:email/:token/confirm", (request, response) => {
             confirmed: true
           }
         );
-        response.redirect("/login");
+        response.redirect("../../../../upload");
       }
     }
   );
