@@ -22,6 +22,7 @@ mongoose
 //Routes
 const loginRoute = require("./routes/login");
 const uploadRoute = require("./routes/storeData");
+const refreshTokenRoute = require("./routes/refreshToken")
 
 //Middlewares
 app.use(function(req, res, next) {
@@ -45,6 +46,7 @@ app.use(cookieParser(process.env.COOKIE_SECET));
 
 app.use("/login", loginRoute);
 app.use("/upload", uploadRoute);
+app.use("/refresh", refreshTokenRoute);
 
 app.use(function(err, req, res, next) {
   // set locals, only providing error in development

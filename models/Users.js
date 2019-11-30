@@ -11,10 +11,11 @@ const userSchema = mongoose.Schema({
   confirmed: {
     type: Boolean,
     default: false
-  }
+  },
+  vault: []
 });
 
-userSchema.methods.toJSON = function(next) {
+userSchema.methods.toJSON = function() {
   let user = this;
   let userObj = user.toObject();
   delete userObj["masterPassword"];

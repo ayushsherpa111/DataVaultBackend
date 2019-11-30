@@ -21,6 +21,20 @@ let restrictedAccess = async (req, _, next) => {
   }
 };
 
+async function generateAccessToken(req, res, next) {
+  let cookie = req.cookies;
+  if (cookie.jid) {
+    let payload = await jwt.verify(cookie.jid, process.env.REFRESH_TOKEN);
+    if (payload) {
+      req.user = payload;
+      next();
+    }
+  } else {
+    next(createError(401, "Please login again"));
+  }
+}
+
 module.exports = {
-  restrictedAccess
+  restrictedAccess,
+  generateAccessToken
 };
