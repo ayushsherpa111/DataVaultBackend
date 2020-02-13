@@ -21,8 +21,9 @@ mongoose
 
 //Routes
 const loginRoute = require("./routes/login");
+const signupRoute = require("./routes/signup");
 const uploadRoute = require("./routes/storeData");
-const refreshTokenRoute = require("./routes/refreshToken")
+const refreshTokenRoute = require("./routes/refreshToken");
 
 //Middlewares
 app.use(function(req, res, next) {
@@ -42,8 +43,10 @@ app.use(
   })
 );
 app.use(cookieParser(process.env.COOKIE_SECET));
-// app.use(function())
 
+// Routes
+
+app.use("/signup", signupRoute);
 app.use("/login", loginRoute);
 app.use("/upload", uploadRoute);
 app.use("/refresh", refreshTokenRoute);

@@ -1,8 +1,8 @@
 const User = require("../models/Users");
-const bcrypt = require("bcrypt");
 const createError = require("http-errors");
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
+
 let emailValidation = async (req, res, next) => {
   const emailRegex = /^[a-zA-Z0-9]+\@[a-zA-Z0-9]+\.[a-zA-Z]{2,}$/gm;
   if (emailRegex.test(req.body.email)) {
@@ -54,20 +54,21 @@ async function createToken(payload, secret, options) {
 }
 
 let authPassword = async (req, _, next) => {
-  try {
-    let hash = await crypto.pbkdf2Sync(
-      req.body.masterPassword,
-      process.env.SALT,
-      95000,
-      256,
-      "whirlpool"
-    );
-    req.body.masterPassword = hash.toString("hex");
-  } catch (error) {
-    console.log(error);
-    next(createError(500, "Unexpected Error"));
-  }
-  next();
+  crypto.pbkdf2(
+    req.body.masterPassword,
+    process.env.SALT || "h",
+    95000,
+    256,
+    "whirlpool",
+    (err, key) => {
+      if (!err) {
+        req.body.masterPassword = key.toString("hex");
+        next();
+      } else {
+        next(createError("Error in validationJS"));
+      }
+    }
+  );
 };
 
 function pbkCompare(plainText, hash) {
