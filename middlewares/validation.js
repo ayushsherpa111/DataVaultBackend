@@ -1,7 +1,8 @@
 const User = require("../models/Users");
 const createError = require("http-errors");
 const jwt = require("jsonwebtoken");
-const crypto = require("crypto");
+const { pbkdf2Sync } = require("crypto");
+const { Worker } = require("worker_threads");
 
 let emailValidation = async (req, res, next) => {
   const emailRegex = /^[a-zA-Z0-9]+\@[a-zA-Z0-9]+\.[a-zA-Z]{2,}$/gm;
@@ -19,33 +20,51 @@ let emailValidation = async (req, res, next) => {
   }
 };
 
-let loginValidation = async (req, res, next) => {
-  let foundUser = await User.findOne({ email: req.body.email });
-  if (foundUser == null) {
-    next(createError(404, "Authentication Error"));
-  } else if (!foundUser.confirmed) {
-    next(createError(401, "Confirm Email first"));
-  } else {
-    try {
-      let passwordMatch = await pbkCompare(
-        req.body.masterPassword,
-        foundUser.masterPassword
-      );
-      console.log(passwordMatch);
-      let copyUser = foundUser.toJSON();
-      copyUser.accessToken = await createToken(
-        { userID: foundUser._id },
-        process.env.JWT_SECRET,
-        {
-          expiresIn: "15m"
-        }
-      );
-      req.user = copyUser;
-      next();
-    } catch {
-      next(createError(404, "Auth Error"));
+let loginValidation = async (req, _, next) => {
+  // match: req.user.masterPassword
+  let passMatchW = new Worker("./helpers/hashGen.js", {
+    workerData: {
+      pass: req.body.masterPassword,
+      salt: req.user.salt
     }
-  }
+  });
+  passMatchW.addListener("message", match => {
+    let pMatch = Buffer.from(match);
+    if (pMatch.equals(req.user.masterPassword)) {
+      next();
+    } else {
+      next(createError("Authentication failed. Please try again"));
+    }
+  });
+};
+
+function TokenGenerator(secretOrPublic, secretOrPrivate, options) {
+  this.secretOrPrivate = secretOrPrivate;
+  this.secretOrPublic = secretOrPublic;
+  this.options = options;
+}
+TokenGenerator.prototype.sign = function(payload, signOptions) {
+  const jwtOptions = Object.assign({}, signOptions, this.options);
+  return jwt.sign(payload, this.secretOrPrivate, jwtOptions);
+};
+
+TokenGenerator.prototype.verify = function(token, signOptions) {
+  const jwtVerifyOptions = Object.assign({}, signOptions, this.options);
+  return jwt.verify(token, this.secretOrPublic, jwtVerifyOptions);
+};
+
+TokenGenerator.prototype.refresh = function(expToken, signOptions) {
+  const payload = jwt.verify(
+    expToken,
+    this.secretOrPublic,
+    signOptions.verify
+  );
+  delete payload.iat;
+  delete payload.exp;
+  delete payload.nbf;
+  delete payload.jti;
+  const jwtOpts = Object.assign({}, this.options, { jwtid: signOptions.jwtid });
+  return this.sign(payload, jwtOpts);
 };
 
 async function createToken(payload, secret, options) {
@@ -71,22 +90,9 @@ let authPassword = async (req, _, next) => {
   );
 };
 
-function pbkCompare(plainText, hash) {
-  return new Promise((resolve, reject) => {
-    crypto.pbkdf2(
-      plainText,
-      process.env.SALT,
-      95000,
-      256,
-      "whirlpool",
-      (err, derievedKey) => {
-        if (hash === derievedKey.toString("hex")) {
-          resolve(true);
-        } else {
-          reject(false);
-        }
-      }
-    );
+function hashUserPass(pass, salt) {
+  return new Promise((res, _) => {
+    res(pbkdf2Sync(pass, salt, 50000, 32, "whirlpool"));
   });
 }
 
@@ -94,5 +100,6 @@ module.exports = {
   emailValidation,
   loginValidation,
   createToken,
-  authPassword
+  authPassword,
+  TokenGenerator
 };

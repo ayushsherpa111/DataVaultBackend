@@ -1,54 +1,63 @@
 const router = require("express").Router();
 const User = require("../models/Users");
-const jwt = require("jsonwebtoken");
-
-const {
-  loginValidation,
-  createToken,
-} = require("../middlewares/validation");
-
-router.post("/", loginValidation, async (req, res) => {
-  res.cookie(
-    "jid",
-    await createToken(
-      { _id: req.user._id, email: req.user.email },
-      process.env.REFRESH_TOKEN,
-      { expiresIn: "7d" }
-    ),
-    {
-      httpOnly: true,
-      expires: new Date(Date.now() + 800000000)
+const { body, validationResult } = require("express-validator");
+const { decode } = require("jsonwebtoken");
+const { loginValidation } = require("../middlewares/validation");
+const { refreshTokenGen, accessTokenGen } = require("../helpers/tokenConsts");
+router.post(
+  "/",
+  [
+    body("masterPassword").notEmpty(),
+    body("email")
+      .notEmpty()
+      .normalizeEmail({
+        all_lowercase: true
+      })
+      .escape()
+      .custom(async (email, { req }) => {
+        let foundUser = await User.findOne({ email });
+        if (foundUser == null) {
+          return Promise.reject("User not Found");
+        } else {
+          req.user = foundUser;
+          return Promise.resolve();
+        }
+      }),
+    loginValidation
+  ],
+  async (req, res) => {
+    const err = validationResult(req);
+    if (err.isEmpty()) {
+      let refCount = req.user.refCount;
+      let acsToken = accessTokenGen.sign(
+        {
+          _id: req.user._id,
+          email: req.user.email
+        },
+        {
+          issuer: "data vault"
+        }
+      );
+      let refToken = refreshTokenGen.sign(
+        {
+          refCount: refCount,
+          _id: req.user._id
+        },
+        { issuer: "data vault", audience: "standard user" }
+      );
+      res.set({
+        "X-ACCESS-TOKEN": "Bearer " + acsToken,
+        "X-REFRESH-TOKEN": refToken
+      });
+      res.json({ msg: "Logged in", body: req.body });
+    } else {
+      res.send({ msg: "FAILED", err });
     }
-  );
-  res.json(req.user)
-});
+  }
+);
 
-router.get("/activate/:email/:token/confirm", (request, response) => {
-  let email = request.params.email;
-  let token = request.params.token;
-  jwt.verify(
-    token,
-    process.env.JWT_SECRET,
-    {
-      issuer: process.env.EMAIL,
-      expiresIn: "1d",
-      subject: email
-    },
-    async (err, decoded) => {
-      if (!err) {
-        await User.findOneAndUpdate(
-          { email },
-          {
-            confirmed: true
-          }
-        );
-        response.send({
-          message: "Welcome"
-        });
-        // response.redirect("../../../../upload");
-      }
-    }
-  );
+router.post("/refDecode", (req, res) => {
+  res.send(decode(req.get("X-REFRESH-TOKEN")));
 });
 
 module.exports = router;

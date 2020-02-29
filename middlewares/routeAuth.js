@@ -13,8 +13,8 @@ let restrictedAccess = async (req, _, next) => {
       } else {
         next(createError(400, "INVALID TOKEN"));
       }
-    } catch {
-      next(createError(418, "Something went wrong with the token"));
+    } catch (e) {
+      next(createError(418, e.toString()));
     }
   } else {
     next(createError(403, "Token Unavailable"));

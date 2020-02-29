@@ -19,6 +19,8 @@ mongoose
     console.log("Connected to the db");
   });
 
+mongoose.set("userCreateIndex", true);
+
 //Routes
 const loginRoute = require("./routes/login");
 const signupRoute = require("./routes/signup");

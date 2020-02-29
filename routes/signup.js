@@ -2,11 +2,16 @@ const router = require("express").Router();
 const { body, validationResult } = require("express-validator");
 const User = require("../models/Users");
 const createError = require("http-errors");
+const jwt = require("jsonwebtoken");
+const { Worker } = require("worker_threads");
 const {
   sendConfirmation,
   generateMessageBody,
-  hashUserPass
+  _encrypt,
+  _decrypt,
+  validateToken
 } = require("../helpers/helper");
+const { randomBytes } = require("crypto");
 
 router.post(
   "/",
@@ -39,38 +44,104 @@ router.post(
       return next(createError(400, { message: errMessages }));
     } else {
       // save user Info to DB
-      hashUserPass(req.body.masterPassword, req.body.salt, (err, hash) => {
-        if (!err) {
-          let newUser = User({
-            email: req.body.email,
-            masterPassword: hash,
-            salt: req.body.salt
-          });
-          newUser.save().then(doc => {
-            generateMessageBody(req.body.email).then(email => {
-              sendConfirmation(req.body.email, email)
-                .then(info => {
-                  res.send(
-                    "Please check your email to finish the setup" +
-                      info.messageId
-                  );
-                })
-                .catch(e => {
-                  console.log("ERROR", e);
-                  next(createError(400, "Email doesnot exist"));
-                });
-            });
-          });
+      const worker = new Worker("./helpers/hashGen.js", {
+        workerData: {
+          pass: req.body.masterPassword,
+          salt: req.body.salt
         }
       });
+      worker.once("message", hash => {
+        const userHash = Buffer.from(Object.values(hash));
+        let newUser = User({
+          email: req.body.email,
+          masterPassword: userHash,
+          salt: req.body.salt
+        });
+        newUser.save();
+      });
+
+      sendConfirmation(req.body.email, email)
+        .then(info => {
+          res.send("Please check your email to finish the setup");
+        })
+        .catch(e => {
+          console.log("ERROR", e);
+          next(createError(400, "Email doesnot exist"));
+        });
+      console.log("SAVING USER");
     }
   }
 );
 
+router.post(
+  "/resend",
+  [body("email").notEmpty(), body("email").escape(), body("email").isEmail()],
+  (req, res) => {
+    User.findByEmail(req.body.email).then(doc => {
+      if (!doc.confirmed) {
+        sendConfirmation(doc.email, body)
+          .then(_ => {
+            res.send("Please check your email");
+          })
+          .catch(er => {
+            res.err(er);
+          });
+      } else {
+        res.send("You can login");
+      }
+    });
+  }
+);
+
+router.get("/activate/:token", (request, response) => {
+  let token = request.params.token;
+  jwt.verify(
+    token,
+    process.env.JWT_SECRET,
+    {
+      issuer: process.env.EMAIL,
+      expiresIn: "1d"
+    },
+    async (err, decoded) => {
+      console.log(decoded);
+      if (!err) {
+        await User.findOneAndUpdate(
+          { email: decoded.email },
+          {
+            confirmed: true
+          }
+        );
+        response.send({
+          message: "Welcome"
+        });
+      }
+    }
+  );
+});
+
 router.get("/", (req, res) => {
   User.findByEmail(req.query["user"]).then(user => {
-    let buff = user.masterPassword;
-    res.send(buff.toString("hex"));
+    let iv = randomBytes(16);
+    console.log(iv);
+    res.cookie("iv", iv);
+    res.send({
+      enc: _encrypt(user.email, "aes-256-cbc", user.masterPassword, iv),
+      iv
+    });
+  });
+});
+
+router.post("/dec", async (req, res) => {
+  User.findByEmail(req.body.email).then(doc => {
+    // console.log(Buffer.from(doc.masterPassword));
+    res.send(
+      _decrypt(
+        req.body.payload,
+        "aes-256-cbc",
+        Buffer.from(doc.masterPassword),
+        Buffer.from(req.cookies.iv.data)
+      )
+    );
   });
 });
 

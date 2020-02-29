@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+
 const passSchema = mongoose.Schema({
   address: {
     type: String,
