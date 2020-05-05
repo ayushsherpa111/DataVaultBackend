@@ -6,7 +6,7 @@ const userSchema = mongoose.Schema({
     required: true
   },
   salt: {
-    type: String,
+    type: Buffer,
     required: true
   },
   masterPassword: {
@@ -20,6 +20,10 @@ const userSchema = mongoose.Schema({
   refCount: {
     type: Number,
     default: 0
+  },
+  hint: {
+    type: String,
+    required: false
   },
   vault: [passSchema]
 });

@@ -22,20 +22,25 @@ let emailValidation = async (req, res, next) => {
 
 let loginValidation = async (req, _, next) => {
   // match: req.user.masterPassword
-  let passMatchW = new Worker("./helpers/hashGen.js", {
-    workerData: {
-      pass: req.body.masterPassword,
-      salt: req.user.salt
-    }
-  });
-  passMatchW.addListener("message", match => {
-    let pMatch = Buffer.from(match);
-    if (pMatch.equals(req.user.masterPassword)) {
-      next();
-    } else {
-      next(createError("Authentication failed. Please try again"));
-    }
-  });
+  if (req.user) {
+    let passMatchW = new Worker("./helpers/hashGen.js", {
+      workerData: {
+        pass: req.body.masterPassword,
+        salt: req.user.salt
+      }
+    });
+    passMatchW.addListener("message", match => {
+      console.log(Buffer.from(match).toString("hex"));
+      console.log(req.user.masterPassword.toString("hex"));
+      if (Buffer.from(match).toString("hex") === req.user.masterPassword.toString("hex")) {
+        next();
+      } else {
+        next(createError(403, "Authentication failed. Please try again"));
+      }
+    });
+  } else {
+    next(createError(400, { message: "Invalid User" }));
+  }
 };
 
 function TokenGenerator(secretOrPublic, secretOrPrivate, options) {
@@ -54,17 +59,17 @@ TokenGenerator.prototype.verify = function(token, signOptions) {
 };
 
 TokenGenerator.prototype.refresh = function(expToken, signOptions) {
-  const payload = jwt.verify(
-    expToken,
-    this.secretOrPublic,
-    signOptions.verify
-  );
+  const payload = jwt.verify(expToken, this.secretOrPublic, signOptions.verify);
   delete payload.iat;
   delete payload.exp;
   delete payload.nbf;
   delete payload.jti;
   const jwtOpts = Object.assign({}, this.options, { jwtid: signOptions.jwtid });
   return this.sign(payload, jwtOpts);
+};
+
+TokenGenerator.prototype.decode = function(token) {
+  return jwt.decode(token);
 };
 
 async function createToken(payload, secret, options) {

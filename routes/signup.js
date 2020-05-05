@@ -1,25 +1,29 @@
 const router = require("express").Router();
-const { body, validationResult } = require("express-validator");
+const { body, validationResult, query } = require("express-validator");
 const User = require("../models/Users");
 const createError = require("http-errors");
 const jwt = require("jsonwebtoken");
 const { Worker } = require("worker_threads");
+const { randomBytes } = require("crypto");
 const {
   sendConfirmation,
   generateMessageBody,
   _encrypt,
   _decrypt,
-  validateToken
+  validateToken,
 } = require("../helpers/helper");
-const { randomBytes } = require("crypto");
+
+router.get("/test", (req, res) => {
+  res.send("sucscse");
+});
 
 router.post(
   "/",
   [
     body("email", "This email is invalid").isEmail(),
-    body("email").custom(async value => {
+    body("email").custom(async (value) => {
       let found = await User.findOne({
-        email: value
+        email: value,
       });
       if (found == null) {
         return Promise.resolve();
@@ -27,48 +31,54 @@ router.post(
       return Promise.reject(`Email already exists ${value}`);
     }),
     body("email").escape(),
-    body("salt").notEmpty(),
-    body("salt").escape(),
+    body("hint").escape(),
     body("masterPassword", "Password is required").notEmpty(),
-    body("masterPassword").escape()
+    body("masterPassword").escape(),
   ],
   (req, res, next) => {
     const error = validationResult(req);
     if (!error.isEmpty()) {
-      const errMessages = error.errors.map(val => {
+      const errMessages = error.errors.map((val) => {
         return {
           message: val.msg,
-          param: val.param
+          param: val.param,
         };
       });
       return next(createError(400, { message: errMessages }));
     } else {
       // save user Info to DB
+      const userSalt = randomBytes(8);
       const worker = new Worker("./helpers/hashGen.js", {
         workerData: {
           pass: req.body.masterPassword,
-          salt: req.body.salt
-        }
+          salt: userSalt,
+        },
       });
-      worker.once("message", hash => {
-        const userHash = Buffer.from(Object.values(hash));
+      worker.once("message", (hash) => {
+        console.log();
         let newUser = User({
           email: req.body.email,
-          masterPassword: userHash,
-          salt: req.body.salt
+          masterPassword: Buffer.from(hash),
+          salt: userSalt,
         });
+        console.log(newUser);
+        if (req.body.hint) {
+          newUser.hint = req.body.hint;
+        }
         newUser.save();
       });
 
-      sendConfirmation(req.body.email, email)
-        .then(info => {
-          res.send("Please check your email to finish the setup");
+      sendConfirmation(req.body.email)
+        .then((_) => {
+          res.send({
+            status: 200,
+            msg: "Please check your email to finish the setup",
+          });
         })
-        .catch(e => {
+        .catch((e) => {
           console.log("ERROR", e);
           next(createError(400, "Email doesnot exist"));
         });
-      console.log("SAVING USER");
     }
   }
 );
@@ -77,48 +87,99 @@ router.post(
   "/resend",
   [body("email").notEmpty(), body("email").escape(), body("email").isEmail()],
   (req, res) => {
-    User.findByEmail(req.body.email).then(doc => {
-      if (!doc.confirmed) {
-        sendConfirmation(doc.email, body)
-          .then(_ => {
-            res.send("Please check your email");
-          })
-          .catch(er => {
-            res.err(er);
-          });
-      } else {
-        res.send("You can login");
-      }
-    });
+    let errors = validationResult(req);
+    console.log(req.body);
+    if (errors.isEmpty()) {
+      User.findByEmail(req.body.email)
+        .then((doc) => {
+          console.log(doc);
+          if (!doc.confirmed) {
+            sendConfirmation(doc.email)
+              .then((_) => {
+                res.send({ stat: 200, msg: "Please check your email" });
+              })
+              .catch((er) => {
+                res.err(er);
+              });
+          } else {
+            res.send({ stat: 200, msg: "You can login" });
+          }
+        })
+        .catch((e) => {
+          res.send("User not found");
+        });
+    } else {
+      res.send(createError(400, { err: "ERR" }));
+    }
   }
 );
 
-router.get("/activate/:token", (request, response) => {
-  let token = request.params.token;
-  jwt.verify(
-    token,
-    process.env.JWT_SECRET,
-    {
-      issuer: process.env.EMAIL,
-      expiresIn: "1d"
-    },
-    async (err, decoded) => {
-      console.log(decoded);
-      if (!err) {
-        await User.findOneAndUpdate(
-          { email: decoded.email },
-          {
-            confirmed: true
+router.post(
+  "/activate",
+  [body("token").notEmpty(), body("token").escape()],
+  (req, res) => {
+    if (validationResult(req).isEmpty()) {
+      let token = req.body.token;
+      jwt.verify(
+        token,
+        process.env.JWT_SECRET,
+        {
+          issuer: "data vault",
+        },
+        async (err, decoded) => {
+          console.log(err);
+          if (!err) {
+            try {
+              await User.findOneAndUpdate(
+                { email: decoded.email },
+                {
+                  confirmed: true,
+                }
+              );
+              res.send({
+                message: "Welcome",
+              });
+            } catch {
+              res.send(createError(400, { err: "Token Error" }));
+            }
           }
-        );
-        response.send({
-          message: "Welcome"
-        });
-      }
+        }
+      );
+    } else {
+      res.send(createError(400, { err: "Invalid Token" }));
     }
-  );
+  }
+);
+
+router.get(
+  "/check",
+  [
+    query("email").isEmail(),
+    query("email").escape(),
+    query("email").custom(async (e) => {
+      return (await User.findByEmail(e)) === null
+        ? Promise.resolve(null)
+        : Promise.reject("Email already taken");
+    }),
+  ],
+  (req, res) => {
+    let errors = validationResult(req);
+    if (errors.isEmpty()) {
+      res.send({ msg: "valid" });
+    } else {
+      res.send({ err: errors.errors[0].msg });
+    }
+  }
+);
+
+router.post("/bruh", (req, res) => {
+  User.findByEmail(req.body.email).then((user) => {
+    let copy = Object.assign({}, user);
+    res.send({ mp: Buffer.from(copy._doc.masterPassword).toString(16) });
+  });
 });
 
+/*
 router.get("/", (req, res) => {
   User.findByEmail(req.query["user"]).then(user => {
     let iv = randomBytes(16);
@@ -144,5 +205,5 @@ router.post("/dec", async (req, res) => {
     );
   });
 });
-
+*/
 module.exports = router;

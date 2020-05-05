@@ -13,7 +13,7 @@ mongoose
   .connect(process.env.DATABASE_URL, {
     useNewUrlParser: true,
     useUnifiedTopology: true,
-    useFindAndModify: false
+    useFindAndModify: false,
   })
   .then(() => {
     console.log("Connected to the db");
@@ -25,42 +25,46 @@ mongoose.set("userCreateIndex", true);
 const loginRoute = require("./routes/login");
 const signupRoute = require("./routes/signup");
 const uploadRoute = require("./routes/storeData");
-const refreshTokenRoute = require("./routes/refreshToken");
-
+const refreshRoute = require("./routes/refreshToken");
 //Middlewares
-app.use(function(req, res, next) {
+app.use(function (req, res, next) {
   res.removeHeader("X-Powered-By");
   next();
 });
 app.use(
   cors({
-    origin: "*"
+    origin: "*",
   })
 );
 app.use(logger("dev"));
 app.use(express.json());
 app.use(
   express.urlencoded({
-    extended: true
+    extended: true,
   })
 );
+app.use((req, res, next) => {
+  res.set({
+    "access-control-expose-headers": ["X-ACCESS-TOKEN", "X-REFRESH-TOKEN"],
+  });
+  next();
+});
 app.use(cookieParser(process.env.COOKIE_SECET));
 
 // Routes
-
 app.use("/signup", signupRoute);
 app.use("/login", loginRoute);
 app.use("/upload", uploadRoute);
-app.use("/refresh", refreshTokenRoute);
+app.use("/refresh", refreshRoute);
 
-app.use(function(err, req, res, next) {
+app.use(function (err, req, res, next) {
   // set locals, only providing error in development
   res.locals.message = err.message;
   res.locals.error = req.app.get("env") === "development" ? err : {};
 
   // render the error page
   res.status(err.status || 500).json({
-    error: err.message
+    error: err.message,
   });
 });
 

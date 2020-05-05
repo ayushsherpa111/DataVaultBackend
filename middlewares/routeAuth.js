@@ -1,40 +1,26 @@
-const jwt = require("jsonwebtoken");
 const createError = require("http-errors");
+const { accessTokenGen, refreshTokenGen } = require("../helpers/tokenConsts");
+const User = require("../models/Users");
 
-let restrictedAccess = async (req, _, next) => {
-  let sentToken = req.get("X-ACCESS-TOKEN");
-  if (sentToken != undefined || sentToken != null) {
-    let token = sentToken.split(" ")[1];
+async function tokenValidRefresh(req, res, next) {
+  let accessToken = req.get("X-ACCESS-TOKEN")
+    ? req.get("X-ACCESS-TOKEN").split(" ")[1]
+    : undefined;
+  if (accessToken && accessToken != "") {
     try {
-      const payload = await jwt.verify(token, process.env.JWT_SECRET);
-      if (payload) {
-        req.payload = payload;
-        next();
-      } else {
-        next(createError(400, "INVALID TOKEN"));
-      }
-    } catch (e) {
-      next(createError(418, e.toString()));
+      let payload = accessTokenGen.verify(accessToken, {
+        issuer: "data vault",
+      });
+      req.payload = payload;
+      return next();
+    } catch {
+      // token is either invalid or has expired
+      console.log("ACCESS TOKEN INVALID");
     }
-  } else {
-    next(createError(403, "Token Unavailable"));
   }
-};
-
-async function generateAccessToken(req, res, next) {
-  let cookie = req.cookies;
-  if (cookie.jid) {
-    let payload = await jwt.verify(cookie.jid, process.env.REFRESH_TOKEN);
-    if (payload) {
-      req.user = payload;
-      next();
-    }
-  } else {
-    next(createError(401, "Please login again"));
-  }
+  return next(createError(401, "Access Token Expired"));
 }
 
 module.exports = {
-  restrictedAccess,
-  generateAccessToken
+  tokenValidRefresh,
 };

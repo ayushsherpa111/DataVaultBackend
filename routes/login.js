@@ -18,15 +18,18 @@ router.post(
         let foundUser = await User.findOne({ email });
         if (foundUser == null) {
           return Promise.reject("User not Found");
-        } else {
+        } else if (foundUser.confirmed) {
           req.user = foundUser;
           return Promise.resolve();
         }
+        return Promise.reject("Please Confirm first");
       }),
     loginValidation
   ],
   async (req, res) => {
+    console.log(req.body);
     const err = validationResult(req);
+    console.log(err);
     if (err.isEmpty()) {
       let refCount = req.user.refCount;
       let acsToken = accessTokenGen.sign(
@@ -43,13 +46,13 @@ router.post(
           refCount: refCount,
           _id: req.user._id
         },
-        { issuer: "data vault", audience: "standard user" }
+        { issuer: "data vault" }
       );
       res.set({
         "X-ACCESS-TOKEN": "Bearer " + acsToken,
         "X-REFRESH-TOKEN": refToken
       });
-      res.json({ msg: "Logged in", body: req.body });
+      res.json({ msg: "Logged in", vault: req.user.vault });
     } else {
       res.send({ msg: "FAILED", err });
     }
@@ -57,7 +60,7 @@ router.post(
 );
 
 router.post("/refDecode", (req, res) => {
-  res.send(decode(req.get("X-REFRESH-TOKEN")));
+  res.send(decode(req.get("X-ACCESS-TOKEN").split(" ")[1]));
 });
 
 module.exports = router;
