@@ -1,6 +1,5 @@
 const createError = require("http-errors");
-const { accessTokenGen, refreshTokenGen } = require("../helpers/tokenConsts");
-const User = require("../models/Users");
+const { accessTokenGen } = require("../helpers/tokenConsts");
 
 async function tokenValidRefresh(req, res, next) {
   let accessToken = req.get("X-ACCESS-TOKEN")
@@ -18,7 +17,7 @@ async function tokenValidRefresh(req, res, next) {
       console.log("ACCESS TOKEN INVALID");
     }
   }
-  return next(createError(401, "Access Token Expired"));
+  return next(createError(401, "Access Token Became Bruh"));
 }
 
 module.exports = {

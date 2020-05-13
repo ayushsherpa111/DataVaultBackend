@@ -30,6 +30,7 @@ router.post("/someContent", (req, res) => {
 
 router.post("/test", (req, res) => {
   res.set({ FOo: "BAR" });
+  console.log(req.payload);
   res.send({ msg: "Success", rec: req.body });
 });
 

@@ -1,13 +1,13 @@
 const router = require("express").Router();
+const createError = require("http-errors");
 const User = require("../models/Users");
 const { accessTokenGen, refreshTokenGen } = require("../helpers/tokenConsts");
 
 router.post("/", async (req, res) => {
   try {
     const refreshToken = req.body.refresh;
-    let refPayload = refreshTokenGen.verify(refreshToken, {
-      issuer: "data vault",
-    });
+    let refPayload = refreshTokenGen.verify(refreshToken);
+    console.log(refPayload);
     let foundUser = await User.findById(refPayload._id, {
       refCount: 1,
       email: 1,
@@ -18,24 +18,29 @@ router.post("/", async (req, res) => {
       foundUser._id == refPayload._id
     ) {
       console.log("GETTING NEW ACCESS TOKEN");
-      let newAccessToken = accessTokenGen.sign(
-        {
-          _id: refPayload._id,
-          email: foundUser.email,
-        },
-        {
-          issuer: "data vault",
-        }
-      );
-      res.set({ "X-ACCESS-TOKEN": "Bearer " + newAccessToken });
-      return res.status(200).send({ msg: "Regenerated" });
+      try {
+        let newAccessToken = accessTokenGen.sign(
+          {
+            _id: refPayload._id,
+            email: foundUser.email,
+          },
+          {
+            issuer: "data vault",
+          }
+        );
+        res.set({ "X-ACCESS-TOKEN": "Bearer " + newAccessToken });
+        return res.status(200).send({ msg: "Regenerated" });
+      } catch {
+        console.log("Refresh TOken exprie");
+        return res.status(403).send({ msg: "Please Login" });
+      }
     } else {
-      return next(createError("IDK"));
+      return res.status(403).send({ msg: "Please Login" });
     }
   } catch (error) {
     console.log(error);
     // referesh token has either expired or is invalid
-    return next(createError(401, "Access Token Failed"));
+    return res.status(403).send({ msg: "Please Login" });
   }
 });
 

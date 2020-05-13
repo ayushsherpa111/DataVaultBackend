@@ -59,8 +59,5 @@ router.post(
   }
 );
 
-router.post("/refDecode", (req, res) => {
-  res.send(decode(req.get("X-ACCESS-TOKEN").split(" ")[1]));
-});
 
 module.exports = router;

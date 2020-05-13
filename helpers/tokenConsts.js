@@ -14,7 +14,7 @@ let accessTokenGen = new TokenGenerator(
   process.env.JWT_SECRET,
   {
     algorithm: "HS256",
-    expiresIn: "15min"
+    expiresIn: "30min"
   }
 );
 

@@ -8,7 +8,7 @@ let emailValidation = async (req, res, next) => {
   const emailRegex = /^[a-zA-Z0-9]+\@[a-zA-Z0-9]+\.[a-zA-Z]{2,}$/gm;
   if (emailRegex.test(req.body.email)) {
     let found = await User.findOne({
-      email: req.body.email
+      email: req.body.email,
     });
     if (found == null) {
       next();
@@ -26,13 +26,16 @@ let loginValidation = async (req, _, next) => {
     let passMatchW = new Worker("./helpers/hashGen.js", {
       workerData: {
         pass: req.body.masterPassword,
-        salt: req.user.salt
-      }
+        salt: req.user.salt,
+      },
     });
-    passMatchW.addListener("message", match => {
+    passMatchW.addListener("message", (match) => {
       console.log(Buffer.from(match).toString("hex"));
       console.log(req.user.masterPassword.toString("hex"));
-      if (Buffer.from(match).toString("hex") === req.user.masterPassword.toString("hex")) {
+      if (
+        Buffer.from(match).toString("hex") ===
+        req.user.masterPassword.toString("hex")
+      ) {
         next();
       } else {
         next(createError(403, "Authentication failed. Please try again"));
@@ -48,17 +51,18 @@ function TokenGenerator(secretOrPublic, secretOrPrivate, options) {
   this.secretOrPublic = secretOrPublic;
   this.options = options;
 }
-TokenGenerator.prototype.sign = function(payload, signOptions) {
+TokenGenerator.prototype.sign = function (payload, signOptions) {
   const jwtOptions = Object.assign({}, signOptions, this.options);
   return jwt.sign(payload, this.secretOrPrivate, jwtOptions);
 };
 
-TokenGenerator.prototype.verify = function(token, signOptions) {
+TokenGenerator.prototype.verify = function (token, signOptions) {
   const jwtVerifyOptions = Object.assign({}, signOptions, this.options);
+  console.log(jwt.verify(token, this.secretOrPublic));
   return jwt.verify(token, this.secretOrPublic, jwtVerifyOptions);
 };
 
-TokenGenerator.prototype.refresh = function(expToken, signOptions) {
+TokenGenerator.prototype.refresh = function (expToken, signOptions) {
   const payload = jwt.verify(expToken, this.secretOrPublic, signOptions.verify);
   delete payload.iat;
   delete payload.exp;
@@ -68,7 +72,7 @@ TokenGenerator.prototype.refresh = function(expToken, signOptions) {
   return this.sign(payload, jwtOpts);
 };
 
-TokenGenerator.prototype.decode = function(token) {
+TokenGenerator.prototype.decode = function (token) {
   return jwt.decode(token);
 };
 
@@ -106,5 +110,5 @@ module.exports = {
   loginValidation,
   createToken,
   authPassword,
-  TokenGenerator
+  TokenGenerator,
 };
