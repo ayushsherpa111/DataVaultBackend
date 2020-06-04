@@ -1,7 +1,6 @@
 const router = require("express").Router();
 const User = require("../models/Users");
 const { body, validationResult } = require("express-validator");
-const { decode } = require("jsonwebtoken");
 const { loginValidation } = require("../middlewares/validation");
 const { refreshTokenGen, accessTokenGen } = require("../helpers/tokenConsts");
 router.post(

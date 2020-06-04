@@ -7,11 +7,13 @@ const passSchema = mongoose.Schema({
   },
   email: {
     type: String,
-    required: true,
+    required: false,
+    default: null,
   },
   username: {
     type: String,
     required: true,
+    default: null,
   },
   password: {
     type: String,
@@ -19,11 +21,13 @@ const passSchema = mongoose.Schema({
   },
   domain: {
     type: String,
-    required: true,
+    required: false,
+    default: null,
   },
   url: {
     type: String,
-    required: true,
+    required: false,
+    default: null,
   },
   category: {
     type: String,
@@ -46,6 +50,10 @@ const passSchema = mongoose.Schema({
   sync: {
     type: Boolean,
     default: true,
+  },
+  hash: {
+    type: String,
+    required: true,
   },
 });
 

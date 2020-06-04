@@ -30,8 +30,6 @@ let loginValidation = async (req, _, next) => {
       },
     });
     passMatchW.addListener("message", (match) => {
-      console.log(Buffer.from(match).toString("hex"));
-      console.log(req.user.masterPassword.toString("hex"));
       if (
         Buffer.from(match).toString("hex") ===
         req.user.masterPassword.toString("hex")
